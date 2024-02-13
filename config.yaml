@@ -1,0 +1,53 @@
+---
+wandb: True # False
+entity: "aghirlanda" 
+wandb_project: "wrap-up"
+# Network
+lr_schedule: "step" # const, warmup, step
+start_lr: 0.0001
+stop_lr: 0.01
+lr_epoch_div: 4
+lr_mult_factor: 0.2
+weight_decay: 0
+architecture: "tcn"
+epochs: 10
+batch_size : 32
+conv_filt: [32, 32, 32, 32]
+dense_layers: [64]
+kernel_size: 5
+dropout: 0.2
+head: 8
+N: 8
+tcn: True
+batch_norm: True
+skip_conn: False
+join_strategy: 'interpolation'
+mid_dense: False
+out_mid_dense: 512
+# Data
+dataset: "hirid"
+# Only one active at a time!
+custom_sampler: "undersampling"
+onset_matching: True
+fake_unbalance: False
+added_noise: False
+normalise: False
+peak_remover: False
+start_prediction_time: 720 #not used in start_from_beginning
+prediction_time: 240
+data_time: 720
+data_freq_min: 2
+seed: 42
+k: 1
+k_splits: 3
+#
+online: True
+online_training_interval: 60 #minutes
+pos_enc: True
+sequential: False
+start_from_beginning: False
+debug_grad: False
+zero_padding: True
+focal_loss: False
+single_tcn: True
+...

@@ -1,0 +1,44 @@
+name: "transformer-sweep"
+program: "main.py"
+method: bayes
+metric:
+  goal: maximize
+  name: eval/PR-AUC
+early_terminate:
+  type: hyperband
+  # Remind to multiply by batch size!!!
+  min_iter: 3
+  s: 2
+  eta: 2
+parameters:
+  dense_layers:
+    values:
+      - [256, 256, 256, 256]
+      - [128, 128, 128, 128]
+      - [128, 128, 128, 256, 256, 256, 512, 512]
+      - [256, 256, 256, 256, 256, 256, 256, 256]
+      - [512, 512, 512, 512, 512, 512, 512, 512]
+    distribution: categorical
+  dropout:
+    max: 0.5
+    min: 0
+    distribution: uniform
+  epochs:
+    max: 20
+    min: 10
+    distribution: int_uniform
+  skip_conn:
+    values:
+      - True
+      - False
+    distribution: categorical
+  batch_norm:
+    values:
+      - True
+      - False
+    distribution: categorical
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - "--train"

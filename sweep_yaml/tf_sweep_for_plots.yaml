@@ -1,0 +1,24 @@
+program: tf_main.py
+method: grid
+name: tcn-tf-sweep-for-plots
+parameters:
+  freq:
+    values:
+      - 60
+  prediction_time:
+    values:
+      - 60
+      - 120
+      - 180
+      - 240
+  k:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+command:
+  - ${env}
+  - python3
+  - tf_main.py

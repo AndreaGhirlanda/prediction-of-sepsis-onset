@@ -1,0 +1,17 @@
+numpy==1.23.5
+pandas
+psycopg2-binary
+torch
+scikit-learn
+scipy
+matplotlib
+wandb
+ipykernel
+pyyaml
+torchsummary
+tqdm
+tsfresh
+plotly
+tsaug
+tensorflow
+tensorflow_model_optimization

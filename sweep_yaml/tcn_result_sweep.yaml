@@ -1,0 +1,28 @@
+name: "results_tcn_k5"
+program: "main.py"
+method: grid
+parameters:
+  k:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+  prediction_time:
+    values:
+      - 4
+      - 6
+      - 8
+      - 10
+      - 12
+  data_freq_min:
+    values:
+      - 2
+      - 60
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - "--train"
+  - "--architecture=tcn"

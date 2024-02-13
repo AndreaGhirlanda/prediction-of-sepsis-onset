@@ -1,0 +1,66 @@
+program: tf_main.py
+method: random
+name: tcn-tf-sweep-2conv
+parameters:
+  added_noise:
+    distribution: categorical
+    values:
+      - false
+      - true
+  batch_size:
+    distribution: categorical
+    values:
+      - 16
+      - 32
+      - 64
+      - 128
+      - 256
+  num_channels:
+    distribution: categorical
+    values:
+      - [16, 16]
+      - [32, 32]
+      - [64, 64]
+  dense_layers:
+    distribution: categorical
+    values:
+      - [16]
+      - [32]
+      - [64]
+      - [16, 16]
+      - [32, 16]
+      - [64, 16]
+      - [64, 64]
+      - [32, 32]
+      - [64, 32]
+  epochs:
+    distribution: int_uniform
+    max: 20
+    min: 10
+  kernel_size:
+    distribution: categorical
+    values:
+      - 3
+      - 5
+      - 7
+      - 9
+  max_pool:
+    distribution: categorical
+    values:
+      - [2, 2]
+      - [0, 0]
+      - [2, 0]
+      - [0, 2]
+  sensor_fusion:
+    distribution: categorical
+    values:
+      - false
+      - true
+  single_tcn:
+    distribution: categorical
+    values:
+      - false
+command:
+  - ${env}
+  - python3
+  - ${program}

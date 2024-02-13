@@ -1,0 +1,58 @@
+name: "tcn-sweep-res"
+program: "main.py"
+method: bayes
+metric:
+  goal: maximize
+  name: eval/PR-AUC
+early_terminate:
+  type: hyperband
+  # Remind to multiply by batch size!!!
+  min_iter: 3
+  s: 2
+  eta: 2
+parameters:
+  conv_filt:
+    values:
+      - [128, 128, 128, 128]
+      - [256, 256, 256, 256]
+      - [512, 512, 512, 512]
+      - [1024, 1024, 1024, 1024]
+    distribution: categorical
+  dense_layers:
+    values:
+      - [256, 256, 128, 128]
+      - [512, 512, 256, 256, 128, 128]
+      - [1024, 1024, 512, 512, 256, 256, 128, 128]
+      - [128, 128]
+      - [256, 256]
+      - [1024, 1024]
+    distribution: categorical
+  dropout:
+    max: 0.2
+    min: 0
+    distribution: uniform
+  epochs:
+    max: 10
+    min: 5
+    distribution: int_uniform
+  kernel_size:
+    values:
+      - 3
+      - 5
+      - 7
+    distribution: categorical
+  skip_conn:
+    values:
+      - True
+      - False
+    distribution: categorical
+  batch_norm:
+    values:
+      - True
+      - False
+    distribution: categorical
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - "--train"

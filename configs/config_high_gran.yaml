@@ -1,0 +1,30 @@
+---
+wandb: True # False
+# Network
+lr_schedule: "step" # const, warmup, step
+start_lr: 0.001
+stop_lr: 0.01
+lr_epoch_div: 4
+lr_mult_factor: 0.2
+weight_decay: 0
+architecture: "tcn"
+epochs: 5
+batch_size : 32
+conv_filt: [256, 256, 256, 256]
+dense_layers: [256, 256]
+kernel_size: 5
+dropout: 0.12
+head: 8
+N: 8
+tcn: True
+batch_norm: True
+skip_conn: False
+# Data
+dataset: "hirid_oversample"
+prediction_time: 4
+data_time: 24
+data_freq_min: 2
+seed: 42
+k: 1
+k_splits: 10
+...

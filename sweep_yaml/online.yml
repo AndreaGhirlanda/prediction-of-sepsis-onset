@@ -1,0 +1,17 @@
+name: "online-tcn-sweep"
+program: "main.py"
+method: grid
+parameters:
+  k:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - "--train"
+  - "--architecture=tcn"
