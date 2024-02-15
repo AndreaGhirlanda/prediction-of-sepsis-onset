@@ -1,3 +1,7 @@
+# This file is used to get statistics such as the time from admission to sepsis onset from the hirid dataset and visualize them.
+# This Code can be ran independently from the rest of the project.
+
+
 import torch
 import numpy as np
 import pandas as pd

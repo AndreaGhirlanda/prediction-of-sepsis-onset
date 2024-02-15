@@ -5,7 +5,17 @@ from models.submodules import conv_submodules, dense_submodules
 
 import numpy as np
  
-def getPositionEncoding(seq_len, d, n, dtype, device):
+def getPositionEncoding(seq_len: torch.Tensor, d: int, n: int, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
+    """
+    Generates positional encoding for the given sequence length.
+
+    :param seq_len: Length of the sequence (tensor of shape (batch_size,))
+    :param d: Dimensionality of the positional encoding
+    :param n: Number of frequencies used for encoding
+    :param dtype: Data type of the positional encoding (e.g., torch.float32)
+    :param device: Device on which to create the positional encoding (e.g., CPU or GPU)
+    :return: Positional encoding tensor of shape (batch_size, seq_len, d)
+    """
     P = torch.zeros((d, seq_len.shape[0]), dtype=dtype, device=device, requires_grad=False)
     for i in np.arange(int(d/2)):
         denominator = np.power(n, 2*i/d)

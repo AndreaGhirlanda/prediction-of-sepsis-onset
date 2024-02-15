@@ -9,6 +9,7 @@ import sys
 warnings.filterwarnings("ignore")
 from sklearn.preprocessing import MinMaxScaler
 import tsaug
+from typing import List, Tuple, Dict, Any
 
 
 class DatasetFromFS(torch.utils.data.Dataset):
@@ -77,7 +78,15 @@ class DatasetFromFS(torch.utils.data.Dataset):
 
 
 
-def get_train_test_subject_ids(subject_ids, test_split, splits):
+def get_train_test_subject_ids(subject_ids: List[str], test_split: float, splits: int) -> Tuple[List[str], List[str]]:
+    """
+    Splits the list of subject IDs into training and testing sets.
+
+    :param subject_ids: List of subject IDs
+    :param test_split: Fraction of data to be used for testing
+    :param splits: Number of splits for cross-validation
+    :return: Tuple containing lists of training and testing subject IDs
+    """
     # Augmented data have a _, must split them without train/test spillage
     # Checking the "original" ones
     orig_subj_id = [x for x in subject_ids if "_" not in x]
@@ -88,7 +97,20 @@ def get_train_test_subject_ids(subject_ids, test_split, splits):
 
     return (train_subject_ids, test_subject_ids)
 
-def get_dataloaders(data_path, datagen_params, freq, store_folder, prediction_time, k, k_splits=5, custom_sampler="under", ):
+def get_dataloaders(data_path: str, datagen_params: Dict[str, Any], freq: int, store_folder: str, prediction_time: int, k: float, k_splits: int = 5, custom_sampler: str = "under") -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, float, int]:
+    """
+    Prepares data loaders for training and testing.
+
+    :param data_path: Path to the data folder
+    :param datagen_params: Parameters for data generation
+    :param freq: Frequency of data sampling
+    :param store_folder: Folder to store data
+    :param prediction_time: Time for prediction
+    :param k: Fraction of data to be used for testing
+    :param k_splits: Number of splits for cross-validation
+    :param custom_sampler: Type of custom sampler for training data
+    :return: Tuple containing training and testing data loaders, class unbalance, and number of batches
+    """
     subject_ids = pd.read_csv(os.path.join(data_path, "0labels.txt"))
     subject_ids["patientid"] = subject_ids["patientid"].astype(str)
     train_subjectids, test_subjectids = get_train_test_subject_ids(subject_ids["patientid"].to_list(), k, k_splits)
@@ -112,34 +134,50 @@ def get_dataloaders(data_path, datagen_params, freq, store_folder, prediction_ti
 
 
 #this loop specifically saves the txt files associated to the windows. the csv files are also saved indirectly by calling the dataset class in the dataloader loop. The saving of the csv files is done in the dataset class.
-def save_windows(train_loader, test_loader, epochs, store_folder):
+def save_windows(train_loader: torch.utils.data.DataLoader, test_loader: torch.utils.data.DataLoader, epochs: int, store_folder: str) -> None:
+    """
+    Saves windows associated with the txt files.
+
+    :param train_loader: DataLoader for training data
+    :param test_loader: DataLoader for testing data
+    :param epochs: Number of epochs
+    :param store_folder: Folder to store data
+    """
     print("Saving windows...")
-    #prepare the txt file for test (it is called train.txt because the dataloader is the same for train and test and it saves always in the train.txt file. The test.txt file is created by renaming the train.txt file after the test dataloader is done)
+    
+    # Prepare the txt file for test
     with open(os.path.join(store_folder, "train.txt"), 'a') as f: 
         f.write("patientid,sepsis,admission_sepsis_time\n") 
 
-    # generate test data
+    # Generate test data
     for batch, (data, target, ids) in enumerate(test_loader):
         pass 
         
-    #rename the train.txt file to test.txt
-    os.rename(os.path.join(store_folder, "train.txt"), os.path.join(store_folder, "test.txt") )
+    # Rename the train.txt file to test.txt
+    os.rename(os.path.join(store_folder, "train.txt"), os.path.join(store_folder, "test.txt"))
     
-    #prepare the txt file for train
+    # Prepare the txt file for train
     with open(os.path.join(store_folder, "train.txt"), 'a') as f: 
         f.write("patientid,sepsis,admission_sepsis_time\n") 
 
-    #iterate over the epochs
+    # Iterate over the epochs
     for i in range(epochs):
-        #iterate over the batches
+        # Iterate over the batches
         for batch, (data, target, ids) in enumerate(train_loader):
             pass
              
-       
     print("Done!")
 
+def generate_data(k: int, freq: int, prediction_time: int, original_folder: str, store_folder: str) -> None:
+    """
+    Generates data for training and testing.
 
-def generate_data(k, freq, prediction_time, original_folder, store_folder):
+    :param k: Value of k
+    :param freq: Frequency
+    :param prediction_time: Prediction time
+    :param original_folder: Path to the original folder
+    :param store_folder: Path to the folder to store generated data
+    """
     datagen_params = {'batch_size': 32,
         'shuffle': True,
         'num_workers': 10}

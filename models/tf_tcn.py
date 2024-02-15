@@ -193,10 +193,10 @@ def get_TCN(vital_signs,single_tcn, max_pool, num_channels, kernel_size, dense_l
     else:
         model.add(multi_headed_convolution(vital_signs, kernel_size, num_channels, max_pool))
 
-    #Flatten the concatenated output of the TCNs so that it can be fed to the dense layers
+    # Flatten the concatenated output of the TCNs so that it can be fed to the dense layers
     model.add(tf.keras.layers.Flatten())
 
-    # Demse block
+    # Dense block
     for dense_out in dense_layers:
         model.add(tf.keras.layers.Dense(dense_out))
         model.add(tf.keras.layers.BatchNormalization(momentum=0.1, epsilon=1e-5))

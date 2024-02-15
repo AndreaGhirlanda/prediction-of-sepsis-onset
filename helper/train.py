@@ -7,22 +7,52 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import pickle
 
+from typing import Union
+
 from helper import dataset, metrics, test
 
 
-def get_criterion(class_unbalance, device, focal_loss):
-    # Using BCE with digits to have better numerical stability[]
+
+
+def get_criterion(class_unbalance: float, device: torch.device, focal_loss: bool) -> torch.nn.Module:
+    """
+    Retrieves the loss criterion for training the neural network model.
+
+    :param class_unbalance: Class unbalance factor
+    :param device: Device on which to run the model (e.g., CPU or GPU)
+    :param focal_loss: Whether to use focal loss or not
+    :return: Loss criterion module (e.g., BCEWithLogitsLoss or WeightedFocalLoss)
+    """
     if focal_loss:
         return WeightedFocalLoss(alpha=class_unbalance, gamma=2, device=device)
     return torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([1/class_unbalance], device=device))
 
 
-def get_optimizer(model, lr, weight_decay):
-    # torch.optim.SGD(model.parameters(), lr=lr)#, momentum=0.9)
+def get_optimizer(model: torch.nn.Module, lr: float, weight_decay: float) -> torch.optim.Optimizer:
+    """
+    Retrieves the optimizer for training the neural network model.
+
+    :param model: Neural network model to optimize
+    :param lr: Learning rate for the optimizer
+    :param weight_decay: Weight decay (L2 penalty) for the optimizer
+    :return: Optimizer module (e.g., Adam or SGD)
+    """
     return torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
 
-def get_scheduler(lr_schedule, optimizer, n_batches, epoches, stop_lr, lr_epoch_div, lr_mult_factor):
+def get_scheduler(lr_schedule: str, optimizer: torch.optim.Optimizer, n_batches: int, epoches: int, stop_lr: float, lr_epoch_div: int, lr_mult_factor: float) -> Union[torch.optim.lr_scheduler.StepLR, torch.optim.lr_scheduler.OneCycleLR, None]:
+    """
+    Retrieves the learning rate scheduler for adjusting the learning rate during training.
+
+    :param lr_schedule: Learning rate scheduling strategy ("step", "const", or "warmup")
+    :param optimizer: Optimizer module for which to adjust the learning rate
+    :param n_batches: Total number of batches in each epoch
+    :param epoches: Total number of epochs for training
+    :param stop_lr: Final learning rate for "warmup" scheduler
+    :param lr_epoch_div: Learning rate decay epoch division for "step" scheduler
+    :param lr_mult_factor: Learning rate multiplier factor for "step" scheduler
+    :return: Learning rate scheduler module (e.g., StepLR, OneCycleLR) or None if lr_schedule is invalid
+    """
     scheduler = None
     if lr_schedule == "step":
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, lr_epoch_div, lr_mult_factor)
@@ -34,6 +64,21 @@ def get_scheduler(lr_schedule, optimizer, n_batches, epoches, stop_lr, lr_epoch_
 
 
 def train_nn_batch(wandb, dataloader, model, device, dtype, criterion, optimizer, scheduler, pbar, debug_grad):
+    """
+    Trains the neural network model for one epoch (one batch at a time).
+
+    :param wandb: Weights & Biases logger object
+    :param dataloader: DataLoader for iterating over the training dataset
+    :param model: Neural network model to train
+    :param device: Device on which to run the model (e.g., CPU or GPU)
+    :param dtype: Data type for the tensors (e.g., torch.float32)
+    :param criterion: Loss criterion for the optimization process
+    :param optimizer: Optimizer module for updating the model parameters
+    :param scheduler: Learning rate scheduler for adjusting the learning rate during training
+    :param pbar: Progress bar object for tracking batch progress
+    :param debug_grad: Flag indicating whether to log gradient information for debugging
+    :return: Tuple containing the average loss and accuracy for the epoch
+    """
     train_loss, correct = 0, 0
     total = 0
     model.train()
@@ -91,7 +136,25 @@ def train_nn_batch(wandb, dataloader, model, device, dtype, criterion, optimizer
     return (train_loss/total, correct/total)
 
 
-def train_nn(wandb, file_path, model, train_generator, test_generator, device, dtype, criterion, optimizer, scheduler, epoches, n_batches, debug_grad, class_unbalance):
+def train_nn(wandb, file_path: str, model: torch.nn.Module, train_generator: torch.utils.data.DataLoader, test_generator: torch.utils.data.DataLoader, device: torch.device, dtype: torch.dtype, criterion: torch.nn.Module, optimizer: torch.optim.Optimizer, scheduler: Union[torch.optim.lr_scheduler.StepLR, torch.optim.lr_scheduler.OneCycleLR], epoches: int, n_batches: int, debug_grad: bool, class_unbalance: float):
+    """
+    Trains the neural network model and evaluates its performance.
+
+    :param wandb: Wandb object for logging metrics and visualizations
+    :param file_path: Path to save the trained model
+    :param model: Neural network model to train
+    :param train_generator: DataLoader for training data
+    :param test_generator: DataLoader for testing data
+    :param device: Device on which to run the model (e.g., CPU or GPU)
+    :param dtype: Data type for the model (e.g., torch.float32)
+    :param criterion: Loss criterion for training the model
+    :param optimizer: Optimizer for updating the model parameters
+    :param scheduler: Learning rate scheduler for adjusting the learning rate during training
+    :param epoches: Total number of epochs for training
+    :param n_batches: Total number of batches in each epoch
+    :param debug_grad: Whether to log gradients and weights for debugging purposes
+    :param class_unbalance: Class unbalance factor
+    """
     pbar = tqdm(total=n_batches, ascii=True, dynamic_ncols=True)
 
     epoches_pbar = tqdm(range(epoches), ascii=True, dynamic_ncols=True)
@@ -107,76 +170,7 @@ def train_nn(wandb, file_path, model, train_generator, test_generator, device, d
     epoches_pbar.close()
 
 
-def train_forest(file_path, model, train_generator, test_generator, data_period, features, wandb, class_unbalance):
-    # Must batch it all into one for training and evaluation.
-    # Throws exception otherwise.
-    # RAM usage ok, so not investigating further.
-    features_mrmr, target = dataset.feature_extraction(train_generator, data_period, features)
 
-    model.fit(features_mrmr, target)
-
-    # Saving model
-    pickle.dump(model, open(os.path.join(file_path, 'model.pkl'), 'wb'))
-
-    val_acc, roc_auc_score, pr_auc_score, conf_mat, f1, weighted_f1 = test.test_forest(test_generator, model, data_period, features, file_path, wandb, class_unbalance)
-    
-    #Update metric, s
-    wandb.log({"eval/accuracy": val_acc,
-                "eval/ROC-AUC": roc_auc_score,
-                "eval/PR-AUC": pr_auc_score,
-                "eval/F1": f1})
-
-    print(f"Accuracy {val_acc:.2f}, ROCAUC {roc_auc_score:.2f}, PRAUC {pr_auc_score:.2f}, F1: {f1:.2f}")
-
-    return val_acc, roc_auc_score, pr_auc_score, f1, weighted_f1
-
-
-def train_xgboost(file_path, model, train_set, test_set, wandb):
-    # Must batch it all into one for training and evaluation.
-    # Throws exception otherwise.
-    # RAM usage ok, so not investigating further.
-
-    eval_set = [train_set,test_set]
-    eval_metrics = ["error","logloss", "auc"]
-
-    model.fit(
-        *train_set, 
-        eval_metric=eval_metrics,
-        eval_set=eval_set, verbose=False
-    )
-
-    # Saving model
-    pickle.dump(model, open(os.path.join(file_path, 'model.pkl'), 'wb'))
-
-    results = model.evals_result()
-    results_sets = list(results.keys())
-    train_curves = results[results_sets[0]]
-    test_curves = results[results_sets[1]]
-
-    train_curve = {}
-    for metric in eval_metrics:
-        train_curve[metric] = wandb.plot.line_series(
-                                xs=range(len(train_curves[metric])),
-                                ys=[train_curves[metric],test_curves[metric]],
-                                keys=["Training","Testing"],
-                                title=f"Training {metric}",
-                                xname="Iteration"
-                            )
-
-    wandb.log(train_curve)
-
-    val_acc, roc_auc_score, pr_auc_score, conf_mat, f1 = test.test_xgboost(test_set, model, file_path, wandb)
-
-    #Update metric
-    wandb.log({"eval/accuracy": val_acc,
-                "eval/ROC-AUC": roc_auc_score,
-                "eval/PR-AUC": pr_auc_score,
-                "eval/F1": f1,
-                "eval/weighted_F1": weighted_f1})
-
-    print(f"Accuracy {val_acc:.2f}, ROCAUC {roc_auc_score:.2f}, PRAUC {pr_auc_score:.2f}, F1: {f1:.2f}")
-    return val_acc, roc_auc_score, pr_auc_score, f1
-  
 #code adapted from https://theguywithblacktie.github.io/kernel/machine%20learning/pytorch/2021/05/20/cross-entropy-loss.html#focal-loss-code-implementation  
 class WeightedFocalLoss(nn.Module):
     def __init__(self, device, alpha=None, gamma=2):

@@ -2,7 +2,6 @@
 # - Get class unbalance
 # - For each positive create the same file times n (class imbalace)
 
-# TODO: Include that into dataset generation pipeline
 
 import pandas as pd
 import os

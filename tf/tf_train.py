@@ -3,11 +3,29 @@ import pandas as pd
 
 import tensorflow as tf
 
-from tf_get_data import get_dataset
+from tf.tf_get_data import get_dataset
 import wandb
 from wandb.keras import WandbMetricsLogger
+from typing import List
 
-def train_model(model, train_data, train_ids, test_data, test_ids, wandb, epoches, start_lr, batch_size):
+def train_model(model: tf.keras.Model, train_data: List[pd.DataFrame], train_ids: pd.DataFrame, test_data: List[pd.DataFrame], test_ids: pd.DataFrame, wandb, epoches: int, start_lr: float, batch_size: int) -> tf.keras.Model:
+    """
+    Train a model using the provided training data and labels, and evaluate it on the provided test data and labels.
+
+    Args:
+    - model: The TensorFlow Keras model to be trained.
+    - train_data: A list of pandas DataFrames containing the training data.
+    - train_ids: A pandas DataFrame containing the training labels.
+    - test_data: A list of pandas DataFrames containing the test data.
+    - test_ids: A pandas DataFrame containing the test labels.
+    - wandb: An instance of the Weights & Biases object for logging.
+    - epoches: The number of epochs for training.
+    - start_lr: The initial learning rate for the optimizer.
+    - batch_size: The batch size for training.
+
+    Returns:
+    - The trained TensorFlow Keras model.
+    """    
     print("Training model...")
     #convert dataframes into tensorflow tensors
     X_train = tf.convert_to_tensor(np.array([data.values for data in train_data]).astype("float32"))

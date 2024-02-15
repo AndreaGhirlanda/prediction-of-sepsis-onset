@@ -8,7 +8,16 @@ import tensorflow as tf
 
 from helper.dataset import peak_remover
    
-def get_dataset(folder, added_noise, peak_removal, reduce_channels):
+def get_dataset(folder: str, added_noise: bool, peak_removal: bool, reduce_channels: bool) -> tuple:
+    """
+    Gets the dataset from the specified folder.
+
+    :param folder: Path to the folder containing the dataset
+    :param added_noise: Flag indicating whether to add noise to the data
+    :param peak_removal: Flag indicating whether to remove peaks from the data
+    :param reduce_channels: Flag indicating whether to reduce channels in the data
+    :return: Tuple containing train_data, test_data, train_ids, and test_ids
+    """    
     print("Loading dataset...")
     #read train data (ids and targer (0 or 1)) from txt file
     train_ids = pd.read_csv(os.path.join(folder, "train.txt"))

@@ -3,23 +3,30 @@ import pandas as pd
 
 import tensorflow as tf
 from helper import metrics
-from tf_get_data import get_dataset
-from tf_quantized_model_evaluation import get_confusion_matrix
+from tf.tf_get_data import get_dataset
+from tf.tf_quantized_model_evaluation import get_confusion_matrix
 import wandb
+from typing import List
 
 
 
-#NOTE: Uncomment the commented lines in order to save data for admission-to-sepsis-time analysis
-def test_float_model(model, test_data, test_ids):
-    # Get test data
+def test_float_model(model, test_data: List[pd.DataFrame], test_ids: pd.DataFrame) -> None:
+    """
+    Test a floating-point model on test data and log metrics on Weights & Biases.
+
+    Args:
+    - model: The floating-point model to be tested.
+    - test_data: A list of pandas DataFrames containing the test data.
+    - test_ids: A pandas DataFrame containing the test labels.
+
+    Returns:
+    - None
+    """    # Get test data
     X_test = tf.convert_to_tensor(np.array([data.values for data in test_data]).astype("float32"))
     y_test = tf.convert_to_tensor(np.array(test_ids["sepsis"]).astype("float32"))
 
     # Initialize lists to store y_true and y_pred
     y_pred_list = []
-
-    #final_df_list = [] # for admission-to-sepsis-time analysis
-
 
     # Iterate through test data and get y_true and y_pred
     for i in range(X_test.shape[0]):
@@ -29,8 +36,6 @@ def test_float_model(model, test_data, test_ids):
         y_pred = 1 if y_pred.numpy()[0][0] >= 0.5 else 0
 
         y_pred_list.append(y_pred)
-
-
 
     ##### Calculate metrics #####
 

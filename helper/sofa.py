@@ -1,6 +1,10 @@
 import numpy as np
+import pandas as pd
 
-def sofa_respiration(row):
+def sofa_respiration(row: pd.Series) -> int:
+    """
+    Calculates the respiratory component of the Sequential Organ Failure Assessment (SOFA) score based on the partial pressure of oxygen in arterial blood.
+    """
     sofa = 0
     row = row["oxygen_partial_pressure_in_arterial_blood"]
     if row == 0:
@@ -18,7 +22,10 @@ def sofa_respiration(row):
         sofa += 4
     return sofa
 
-def sofa_coagulation(row):
+def sofa_coagulation(row: pd.Series) -> int:
+    """
+    Calculates the coagulation component of the SOFA score based on the platelet count.
+    """
     sofa = 0
     row = row["platelets_volume_in_blood"]
     if row == 0:
@@ -36,7 +43,10 @@ def sofa_coagulation(row):
         sofa += 4
     return sofa
 
-def sofa_liver(row):
+def sofa_liver(row: pd.Series) -> int:
+    """
+    Calculates the liver component of the SOFA score based on the serum bilirubin level.
+    """
     sofa = 0
     row = row["bilirubintotal_molesvolume_in_serum_or_plasma"]
     if row == 0:
@@ -54,7 +64,10 @@ def sofa_liver(row):
         sofa += 4
     return sofa
 
-def sofa_cardiovascular(cardiovascular_data):
+def sofa_cardiovascular(cardiovascular_data: pd.DataFrame) -> int:
+    """
+    Calculates the cardiovascular component of the SOFA score based on the mean arterial pressure and the administration of specific medications.
+    """
     sofa = 0
     if cardiovascular_data["map"] == 0:
         # Measure not given
@@ -76,7 +89,10 @@ def sofa_cardiovascular(cardiovascular_data):
         
     return sofa
 
-def sofa_cns(row):
+def sofa_cns(row: pd.Series) -> int:
+    """
+    Calculates the central nervous system (CNS) component of the SOFA score based on the Glasgow Coma Scale score.
+    """
     sofa = 0
     row = row["glagsow_coma_score"]
     if row == 0:
@@ -94,7 +110,10 @@ def sofa_cns(row):
         sofa += 4
     return sofa
 
-def sofa_renal(renal_data):
+def sofa_renal(renal_data: pd.DataFrame) -> int:
+    """
+    Calculates the renal component of the SOFA score based on the serum creatinine level and urine output.
+    """
     sofa = 0
     creatinine = renal_data["creatinine"]
     hourly_urine_volume = renal_data["hourly_urine_volume"]
@@ -117,7 +136,10 @@ def sofa_renal(renal_data):
     return sofa
 
 
-def get_sofa(data, pharma):
+def get_sofa(data: pd.DataFrame, pharma: pd.DataFrame) -> pd.DataFrame:
+    """
+    Computes the overall SOFA score by aggregating the scores from each component based on the provided data and pharmacological information.
+    """
     # Checking if the patient has been given any medicine
     if pharma.shape[0] > 0:
         pharma = pharma.rename(columns={"givenat": "date_time"})

@@ -12,14 +12,18 @@ from tqdm import tqdm
 
 from . import sofa
 
-from tsfresh import extract_relevant_features, extract_features
-from tsfresh.feature_extraction import MinimalFCParameters, EfficientFCParameters
 import tsaug
 
 from datetime import datetime
+from typing import Dict, List, Tuple
 
-# %%
-def connect(params_dic):
+def connect(params_dic: Dict) -> psycopg2.extensions.connection:
+    """
+    Establishes a connection to a PostgreSQL server using the provided parameters.
+
+    :param params_dic: A dictionary containing connection parameters such as database name, user, password, host, and port.
+    :return: A connection object representing the connection to the PostgreSQL server.
+    """
     conn = None
     try:
         # connect to the PostgreSQL server
@@ -30,25 +34,33 @@ def connect(params_dic):
         print("Connection error")
     return conn
 
-# %%
-def get_all_patient_ids(conn_params):
-    # Return list of all patients from SQL database
+def get_all_patient_ids(conn_params: Dict) -> pd.DataFrame:
+    """
+    Retrieves all patient IDs from a SQL database.
+
+    :param conn_params: A dictionary containing connection parameters such as database name, user, password, host, and port.
+    :return: A pandas DataFrame containing all patient IDs.
+    """
+    # Establish connection to the database
     conn = connect(conn_params)
+
+    # Query all patient IDs from the database
     subject_ids = pd.read_sql_query("SELECT * FROM patientid_table", con=conn)
+
+    # Close the database connection
     conn.close()
+
     return subject_ids
 
+def in_sql_gen(data: list, begin: int = None, end: int = None) -> str:
+    """
+    Generates an SQL IN clause from a list of data.
 
-# def get_train_test_patient_ids(conn_params, test_size=0.1):
-#     # Divide all the subjects in train and test set
-#     conn = connect(conn_params)
-#     index_subject_id = pd.read_sql_query("SELECT * FROM patientid_table", con=conn)
-#     index_train_subject_id, index_test_subject_id = train_test_split(index_subject_id, test_size=test_size, shuffle=True)
-#     conn.close()
-#     return (index_train_subject_id, index_test_subject_id)
-
-# %%
-def in_sql_gen(data, begin=None, end=None):
+    :param data: A list of values.
+    :param begin: Optional. Start index of the slice of data to include.
+    :param end: Optional. End index of the slice of data to include.
+    :return: A string representing the generated SQL IN clause.
+    """
     load = "("
     for i in data[begin:end]:
         load += str(i) + ", "
@@ -56,7 +68,15 @@ def in_sql_gen(data, begin=None, end=None):
     return load
 
 
-def sepsis_labeling(sofa, pharma_table, antibiotics_criteria):
+def sepsis_labeling(sofa: pd.DataFrame, pharma_table: pd.DataFrame, antibiotics_criteria: list) -> pd.Timestamp:
+    """
+    Labels sepsis onset time based on SOFA score and antibiotic administration.
+
+    :param sofa: DataFrame containing SOFA scores over time.
+    :param pharma_table: DataFrame containing pharmaceutical data including antibiotic administration times.
+    :param antibiotics_criteria: List of criteria for identifying antibiotics administration in pharma_table.
+    :return: Timestamp indicating the onset time of sepsis, or -1 if sepsis onset is not detected.
+    """
     sofa_diff = sofa.iloc[:,-1] - sofa.iloc[:,-1].shift(1)
     onset = sofa_diff[sofa_diff >= 2].dropna().reset_index()
     if onset.shape[0] == 0:
@@ -80,21 +100,53 @@ def sepsis_labeling(sofa, pharma_table, antibiotics_criteria):
             return -1
 
 
-def pad_hours_before(data, freq, start_time, zero_padding):
-    # If onset happens before the lenght of data window + prediction time
+def pad_hours_before(data: pd.DataFrame, freq: int, start_time: pd.Timestamp, zero_padding: bool) -> pd.DataFrame:
+    """
+    Pads missing data before the start time with zero values or backward fills using the last observed value.
+
+    :param data: DataFrame containing the original data.
+    :param freq: The frequency of data points in minutes.
+    :param start_time: The start time of the data window.
+    :param zero_padding: Whether to pad missing values with zeros.
+    :return: DataFrame with missing data padded before the start time.
+    """
+    # Find the earliest timestamp in the data
     end = data["date_time"].min()
-    time_pad = pd.date_range(start=start_time, end=end, freq=str(freq)+"Min", inclusive='neither')
-    time_pad = pd.DataFrame([[t_p if c=="date_time" else data["patientid"][0] if c=="patientid" else np.NaN for c in data.columns] for t_p in time_pad.values], columns=data.columns)
     
+    # Generate timestamps to pad missing data
+    time_pad = pd.date_range(start=start_time, end=end, freq=str(freq) + "Min", inclusive='neither')
+    
+    # Create DataFrame to pad missing data
+    time_pad = pd.DataFrame([[t_p if c == "date_time" else data["patientid"][0] if c == "patientid" else np.NaN for c in data.columns] for t_p in time_pad.values], columns=data.columns)
+    
+    # Concatenate original data with padded data and sort by date_time
     data = pd.concat([data, time_pad], ignore_index=True).sort_values("date_time").reset_index(drop=True)
+    
+    # Fill missing values with zeros if zero_padding is True, otherwise backward fill
     if zero_padding:
         for col in data.columns:
             data[col] = data[col].replace('nan', np.nan).fillna(0)
     else:
         data = data.bfill()
+    
     return data
 
-def get_all_windows(data,start_prediction_time, prediction_time, online_training_interval, data_time, onset, freq, start_from_beginning, time_data, zero_padding):
+def get_all_windows(data: pd.DataFrame, start_prediction_time: pd.Timestamp, prediction_time: int, online_training_interval: int, data_time: int, onset: pd.Timestamp, freq: str, start_from_beginning: bool, time_data: str, zero_padding: bool) -> List[pd.DataFrame]:
+    """
+    Generates all windows from the data.
+
+    :param data: DataFrame containing the input data.
+    :param start_prediction_time: Timestamp indicating the start time for making predictions.
+    :param prediction_time: The time in minutes for onset prediction.
+    :param online_training_interval: The interval between online trainings.
+    :param data_time: The time in minutes given to train the network.
+    :param onset: Timestamp indicating the onset time.
+    :param freq: The period of data acquisition in minutes.
+    :param start_from_beginning: Whether to use the full length of data available for both control and positive cases.
+    :param time_data: Additional time data.
+    :param zero_padding: Whether to use zero padding.
+    :return: A list of DataFrames representing the generated windows.
+    """
     windows = []
     if start_from_beginning:
         i = 1        
@@ -113,22 +165,48 @@ def get_all_windows(data,start_prediction_time, prediction_time, online_training
 
     return windows 
 
-def clean_window(window, data_time, freq, col_interest):
+def clean_window(window: pd.DataFrame, data_time: int, freq: str, col_interest: List[str]) -> pd.DataFrame:
+    """
+    Cleans and preprocesses the window data by calculating means for specific columns and resampling.
+
+    :param window: DataFrame representing the window data.
+    :param data_time: The time in minutes given to train the network.
+    :param freq: The period of data acquisition in minutes.
+    :param col_interest: List of columns of interest for preprocessing.
+    :return: Cleaned and preprocessed DataFrame representing the window data.
+    """
+    # Calculate mean values for specific columns
     window["sbp"] = window[["invasive_systolic_arterial_pressure", "non_invasive_systolic_arterial_pressure"]].apply(lambda row: np.mean(row[row.notnull()]), axis=1)
     window["dbp"] = window[["invasive_diastolic_arterial_pressure", "non_invasive_diastolic_arterial_pressure"]].apply(lambda row: np.mean(row[row.notnull()]), axis=1)
     window["mbp"] = window[["invasive_mean_arterial_pressure", "non_invasive_mean_arterial_pressure"]].apply(lambda row: np.mean(row[row.notnull()]), axis=1)
     window["spo2"] = window[["peripheral_oxygen_saturation", "peripheral_oxygen_saturation_0"]].apply(lambda row: np.mean(row[row.notnull()]), axis=1)
     window["glucose"] = window[["glucose_molesvolume_in_serum_or_plasma", "glucose_molesvolume_in_serum_or_plasma_0", "glucose_molesvolume_in_serum_or_plasma_1"]].apply(lambda row: np.mean(row[row.notnull()]), axis=1)
 
-    # resample data
+    # Resample data
     window = window[col_interest]
     window = window.resample(str(freq)+"Min", on="date_time", closed='left').first().reset_index()
+    
     # Making sure the time dimension is right
     window = window.iloc[0:int(data_time/freq),:]
 
     return window
 
-def get_window(data, prediction_minutes, data_minutes, onset, freq, time_data=None, shift=0,start_from_beginning=False, online_training_interval=-1, zero_padding=False):
+def get_window(data: pd.DataFrame, prediction_minutes: int, data_minutes: int, onset: str, freq: str, time_data=None, shift: int = 0, start_from_beginning: bool = False, online_training_interval: int = -1, zero_padding: bool = False) -> pd.DataFrame:
+    """
+    Retrieves a window of data based on the prediction time, data time, onset of sepsis, and other parameters.
+
+    :param data: DataFrame representing the entire dataset.
+    :param prediction_minutes: Time in minutes for onset prediction.
+    :param data_minutes: Time in minutes given to train the network.
+    :param onset: Time of sepsis onset.
+    :param freq: Period of data acquisition in minutes.
+    :param time_data: Time to consider for training if starting from the beginning.
+    :param shift: Shift in minutes for the start of the window.
+    :param start_from_beginning: Indicates whether to start from the beginning of the data.
+    :param online_training_interval: Interval between online trainings.
+    :param zero_padding: Indicates whether to use zero padding.
+    :return: DataFrame representing the window of data.
+    """
     # Getting the data_minutes amount of data before prediction_minutes from sepsis onset
     start_data = data["date_time"].min()
     end_data = data["date_time"].max()
@@ -217,6 +295,20 @@ def get_window(data, prediction_minutes, data_minutes, onset, freq, time_data=No
 
 
 def inclusion_criteria(data, inter_columns, pharma, age, dur_stay, onset, time_from_onset, antibiotics, antibiotics_before):
+    """
+    Applies inclusion criteria to determine whether a patient should be included in the dataset.
+
+    :param data: DataFrame containing patient data.
+    :param inter_columns: Columns of interest for checking missing values.
+    :param pharma: DataFrame containing pharmaceutical data.
+    :param age: Age of the patient.
+    :param dur_stay: Minimum duration of stay required for inclusion (in timedelta format).
+    :param onset: Time of sepsis onset.
+    :param time_from_onset: Minimum time from sepsis onset required for inclusion (in timedelta format).
+    :param antibiotics: List of antibiotics given.
+    :param antibiotics_before: Time before which antibiotics should be given (in timedelta format).
+    :return: 1 if the patient should be excluded based on the criteria, otherwise 0.
+    """
     # Duration of stay > 24h
     lenght_of_stay = data["date_time"].max() - data["date_time"].min()
     if lenght_of_stay < dur_stay:
@@ -244,51 +336,102 @@ def inclusion_criteria(data, inter_columns, pharma, age, dur_stay, onset, time_f
 
 ## COLLATE
 def collate_dataset_gen(batch):
+    """
+    Collates a batch of data samples.
+
+    :param batch: Batch of data samples.
+    :return: The batch itself without any modification.
+    """
     return batch
 
 
 def collate_nn(batch):
+    """
+    Collates a batch of data samples for neural network training or evaluation.
+
+    :param batch: Batch of data samples, each containing a window, an onset label, and an identifier.
+    :return: A tuple containing the collated window tensor, the collated onset label tensor, and the collated identifier tensor.
+    """
+    # Stack the windows, onsets, and ids from the batch
     window = torch.stack([w for w, _, _, _ in batch])
     onset = torch.stack([o for _, o, _, _ in batch])
     ids = torch.stack([id for _, _, _, id in batch])
+    
+    # Return the collated batch as a tuple
     return (window, onset, ids)
 
 def collate_nn_sequential(batch):
-    window_list = []
-    onset_list = []
-    id_list = []
-    for windows,o,col,id in batch:
+    """
+    Collates a batch of neural network training or evaluation with sequential data.
+
+    :param batch: Batch of sequential data samples, each containing multiple windows, onset labels, and identifiers.
+    :return: A tuple containing the collated window tensor, the collated onset label tensor, and the collated identifier tensor.
+    """
+    window_list = []  # List to store windows from all samples
+    onset_list = []   # List to store onset labels from all samples
+    id_list = []      # List to store identifiers from all samples
+    
+    # Iterate over each sample in the batch
+    for windows, onset, col, id in batch:
+        # Iterate over each window in the sample
         for w in windows:
-            window_list.append(w)
-            onset_list.append(o)
-            id_list.append(id)
+            window_list.append(w)   # Append window to window list
+            onset_list.append(onset)  # Append onset label to onset list
+            id_list.append(id)       # Append identifier to identifier list
+    
+    # Stack the windows, onsets, and ids from all samples
     window = torch.stack(window_list)
     onset = torch.stack(onset_list)
     ids = torch.stack(id_list)
+    
+    # Return the collated batch as a tuple
     return (window, onset, ids)
 
-def collate_forest(batch):
-    window = torch.stack([w for w, _, _, _ in batch])
-    onset = torch.stack([o for _, o, _, _ in batch])
-    # Columns repeated along the batch dimension, getting only the first
-    columns = batch[0][2]
-    return (window, onset, columns)
-
-
 def peak_remover(df):
-    df_replaced = df.copy()
+    """
+    Remove peaks from a DataFrame by replacing values that exceed a certain threshold with the previous value.
+
+    :param df: Input DataFrame containing potentially noisy data.
+    :return: DataFrame with peaks removed.
+    """
+    df_replaced = df.copy()  # Create a copy of the input DataFrame
+    
+    # Create a mask where the ratio of each value to the previous value is greater than 1.5
     mask = (df_replaced / df_replaced.shift(1)) > 1.5
+    
+    # Replace values that exceed the threshold with the previous value
     df_replaced[mask] = df_replaced.shift(1)[mask]
-    return df_replaced
+    
+    return df_replaced  # Return the DataFrame with peaks removed
 
-def get_patients_fs(folder, train_ids):
+def get_patients_fs(folder: str, train_ids: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Get patient IDs from a CSV file in the specified folder and filter them based on training IDs.
+
+    :param folder: Folder containing the CSV file.
+    :param train_ids: List of training IDs to filter patient IDs.
+    :return: Filtered patient IDs dataframe and the original patient IDs dataframe.
+    """
+    # Read patient IDs from the CSV file
     subject_ids = pd.read_csv(os.path.join(folder, "0labels.txt"))
+    
+    # Convert patient ID to string type to ensure consistent comparison
     subject_ids["patientid"] = subject_ids["patientid"].astype(str)
+    
+    # Filter patient IDs based on training IDs
     ids = subject_ids[subject_ids["patientid"].isin(train_ids)]
-    return ids, subject_ids
+    
+    return ids, subject_ids  # Return filtered patient IDs dataframe and original patient IDs dataframe
 
 
-def get_time_from_admission_to_sepsis(ids, folder):
+def get_time_from_admission_to_sepsis(ids: pd.DataFrame, folder: str) -> np.array:
+    """
+    Calculate the time from admission to sepsis for each patient in the given DataFrame.
+
+    :param ids: DataFrame containing patient IDs and sepsis information.
+    :param folder: Folder containing the patient data files.
+    :return: Array containing the time duration from admission to sepsis for each patient.
+    """
     times_before_sepsis = []
     for _, patient in ids[ids["sepsis"]==True].iterrows():
         data = pd.read_csv(os.path.join(folder, str(patient["patientid"]) + ".csv"))
@@ -299,7 +442,6 @@ def get_time_from_admission_to_sepsis(ids, folder):
     times_before_sepsis = np.array(times_before_sepsis)
     return times_before_sepsis
  
-# %%
 class Dataset(torch.utils.data.Dataset):
   # Torch data loader
   def __init__(self, patientid, conn_params, freq = 2):
@@ -405,7 +547,6 @@ class DatasetFromFS(torch.utils.data.Dataset):
     # Dataset saved with freq=2
     window = get_window(data, self.prediction_minutes, self.data_minutes, sepsis_time, freq=2, time_data=time_data, zero_padding=self.zero_padding)
     
-    # TODO: log into wanbd
     col_interest = ["date_time", "heart_rate", "sbp", "dbp", "mbp", "respiratory_rate", "core_body_temperature", "spo2", "glucose"]
     
     window = clean_window(window, self.data_minutes, self.freq, col_interest)
@@ -499,9 +640,6 @@ class DatasetFromFS_sequential(torch.utils.data.Dataset):
 
         # Load the labels
         self.ids, _ = get_patients_fs(folder, train_ids)
-        # subject_ids = pd.read_csv(os.path.join(self.folder, "0labels.txt"))
-        # subject_ids["patientid"] = subject_ids["patientid"].astype(str)
-        # self.label = subject_ids[subject_ids["patientid"].isin(train_ids)]
 
     def __len__(self):
         'Denotes the total number of samples'
@@ -528,7 +666,6 @@ class DatasetFromFS_sequential(torch.utils.data.Dataset):
 
         columns = windows[0].columns.to_list()
 
-        # TODO: log into wanbd
         col_interest = ["date_time", "heart_rate", "sbp", "dbp", "mbp", "respiratory_rate", "core_body_temperature", "spo2", "glucose"]
         
         windows_tensor = []
@@ -553,12 +690,19 @@ class DatasetFromFS_sequential(torch.utils.data.Dataset):
         return (windows_tensor, onset_tensor, columns, index)
 
 
-def generate_dataset(data_path):
+def generate_dataset(data_path: str):
+    """
+    Generates dataset from the database and saves it to CSV files.
+
+    Args:
+        data_path (str): Path to the directory where the dataset files will be saved.
+    """
+    
     conn_params = {
-            "host"      : "venus-pbl.ee.ethz.ch",
-            "database"  : "hirid",
-            "user"      : "mgiordano",
-            "password"  : "pbl4ever"
+            "host"      : "",
+            "database"  : "",
+            "user"      : "",
+            "password"  : ""
         }
 
     # Batch inside the dataloader since we're getting them from the database
@@ -585,8 +729,19 @@ def generate_dataset(data_path):
 
 
 
-# %%
-def get_train_test_subject_ids(subject_ids, test_split, splits):
+def get_train_test_subject_ids(subject_ids: list, test_split: float, splits: int) -> tuple:
+    """
+    Split the subject ids into training and testing sets.
+
+    Args:
+        subject_ids (list): List of subject ids.
+        test_split (float): Percentage of data to be used for testing.
+        splits (int): Number of splits for the data.
+
+    Returns:
+        tuple: A tuple containing the training and testing subject ids.
+    """
+    
     # Augmented data have a _, must split them without train/test spillage
     # Checking the "original" ones
     orig_subj_id = [x for x in subject_ids if "_" not in x]
@@ -598,7 +753,26 @@ def get_train_test_subject_ids(subject_ids, test_split, splits):
     return (train_subject_ids, test_subject_ids)
 
 
-def get_dataloaders(data_path, data_params, datagen_params, collate_fn, k, k_splits, sequential = False, custom_sampler="", onset_matching=False, fake_unbalance=False):
+def get_dataloaders(data_path: str, data_params: dict, datagen_params: dict, collate_fn: callable, k: float, k_splits: int, sequential: bool = False, custom_sampler: str = "", onset_matching: bool = False, fake_unbalance: bool = False) -> tuple:
+    """
+    Get data loaders for training and testing.
+
+    Args:
+        data_path (str): Path to the data.
+        data_params (dict): Parameters for creating the dataset.
+        datagen_params (dict): Parameters for generating data.
+        collate_fn (callable): Function to collate the data.
+        k (float): Percentage of data to be used for testing.
+        k_splits (int): Number of splits for the data.
+        sequential (bool): Flag indicating whether to use sequential data loading.
+        custom_sampler (str): Custom sampler for the data.
+        onset_matching (bool): Flag indicating whether to use onset matching.
+        fake_unbalance (bool): Flag indicating whether to use fake unbalance.
+
+    Returns:
+        tuple: A tuple containing the training generator, testing generator, class unbalance, and number of batches.
+    """
+    
     subject_ids = pd.read_csv(os.path.join(data_path, "0labels.txt"))
     subject_ids["patientid"] = subject_ids["patientid"].astype(str)
     train_subjectids, test_subjectids = get_train_test_subject_ids(subject_ids["patientid"].to_list(), k, k_splits)
@@ -639,7 +813,18 @@ def get_dataloaders(data_path, data_params, datagen_params, collate_fn, k, k_spl
     return (train_generator, test_generator, class_unbalance, n_batches)
 
 
-def tensor_to_df(data, columns, T_min=2):
+def tensor_to_df(data: torch.Tensor, columns: List[str], T_min: int = 2) -> pd.DataFrame:
+    """
+    Convert a tensor to a DataFrame.
+
+    Args:
+        data (torch.Tensor): The tensor to convert.
+        columns (List[str]): List of column names for the DataFrame.
+        T_min (int, optional): Time in minutes. Defaults to 2.
+
+    Returns:
+        pd.DataFrame: The resulting DataFrame.
+    """
     subjects = data.shape[0]
     time_samples = data.shape[1]
     data = data.reshape(-1, data.shape[-1])
@@ -653,27 +838,3 @@ def tensor_to_df(data, columns, T_min=2):
     df["time"] = date_ranges_series.reset_index(drop=True)
 
     return df
-
-
-def feature_extraction(test_generator, data_period, features):
-    data_list = []
-    target_list = []
-    columns = []
-    for data, target, columns in tqdm(test_generator, desc='Data Fetching', leave=True, dynamic_ncols=True):
-        data_list.append(data)
-        target_list.append(target)
-        columns = columns
-    target = torch.cat(target_list).cpu()
-    data = torch.cat(data_list).cpu()
-    
-    df = tensor_to_df(data, columns[1:], data_period)
-    # parameter_extracted = MinimalFCParameters()
-    parameter_extracted = EfficientFCParameters()
-    features_extracted = extract_features(timeseries_container=df, column_id='id', column_sort='time',
-                                                default_fc_parameters=parameter_extracted)
-    features_mrmr = features_extracted[features]
-    features_mrmr = features_mrmr.to_numpy()
-    features_mrmr = np.nan_to_num(features_mrmr)
-    target = target.numpy()[:,0]
-
-    return (features_mrmr, target)

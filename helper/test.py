@@ -4,14 +4,24 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from helper import metrics, dataset
+from helper import metrics
 
 import matplotlib.pyplot as plt
 import os
+from typing import Any, Tuple
 
 # Making the forward pass for testing 
 # a generator because used in multple metrics
-def get_predictions_nn(dataloader, model, device, dtype):
+def get_predictions_nn(dataloader: torch.utils.data.DataLoader, model: torch.nn.Module, device: torch.device, dtype: torch.dtype) -> None:
+    """
+    Performs the forward pass of the neural network model on the test data generator.
+
+    :param dataloader: DataLoader providing the test data
+    :param model: Neural network model to evaluate
+    :param device: Device on which to run the model (e.g., CPU or GPU)
+    :param dtype: Data type to use (e.g., torch.float32)
+    :return: None
+    """
     model.eval()
     with torch.no_grad():
         for data, target, ids in tqdm(dataloader, desc='Test iterator', leave=False, dynamic_ncols=True):
@@ -24,11 +34,23 @@ def get_predictions_nn(dataloader, model, device, dtype):
             yield (target, output)
 
 
-def test_nn(test_generator, model, criterion, file_path, device, dtype, wandb, class_unbalance):
+def test_nn(test_generator: torch.utils.data.DataLoader, model: torch.nn.Module, criterion: torch.nn.Module, file_path: str, device: torch.device, dtype: torch.dtype, wandb: Any, class_unbalance: float) -> Tuple[float, float, float, float, np.ndarray, float, float]:
+    """
+    Evaluates the performance of a neural network model on the test dataset.
+
+    :param test_generator: DataLoader providing the test data
+    :param model: Neural network model to evaluate
+    :param criterion: Loss criterion used for evaluation
+    :param file_path: File path for logging
+    :param device: Device on which to run the model (e.g., CPU or GPU)
+    :param dtype: Data type to use (e.g., torch.float32)
+    :param wandb: Weights & Biases logging object
+    :param class_unbalance: Class unbalance factor
+    :return: Tuple containing evaluation metrics (accuracy, loss, ROC AUC, PR AUC, confusion matrix, F1 score, weighted F1 score)
+    """
     total_loss = 0
     pred_list = []
     target_list = []
-    # TODO: verify it's correct
     for target, output in get_predictions_nn(test_generator, model, device, dtype):
         total_loss += criterion(output, target).item()
 
@@ -77,40 +99,3 @@ def test_nn(test_generator, model, criterion, file_path, device, dtype, wandb, c
 
     return (test_acc, total_loss, roc_auc, pr_auc, conf_mat, f1, weighted_f1)
 
-def test_forest(test_generator, model, data_period, features, file_path, wandb, class_unbalance):
-    features_mrmr, target = dataset.feature_extraction(test_generator, data_period, features)
-    # [pred class 0, pred class 1]
-    pred = model.predict_proba(features_mrmr)[:,1]
-
-    test_acc, _, total = metrics.accuracy(target, pred)
-
-    _, _, roc_auc, _, disp_roc = metrics.roc_curves(target, pred, wandb)
-    _, _, pr_auc, _, disp_pr = metrics.pr_curves(target, pred, wandb)
-
-    # disp_roc.savefig(os.path.join(file_path, "roc.png"))
-    # disp_pr.savefig(os.path.join(file_path, "precision_recall.png"))
-
-    conf_mat = metrics.conf_matrix(target, pred, wandb)
-    f1, weighted_f1 = metrics.f1(target, pred, class_unbalance)
-
-    print(f"Accuracy {test_acc:.2f}, ROCAUC {roc_auc:.2f}, PRAUC {pr_auc:.2f}, F1 {f1:.2f}")
-    return (test_acc, roc_auc, pr_auc, conf_mat, f1, weighted_f1)
-
-def test_xgboost(test_set, model, file_path, wandb):
-    features_mrmr, target = (test_set[0], test_set[1])
-    # [pred class 0, pred class 1]
-    pred = model.predict_proba(features_mrmr)[:,1]
-
-    test_acc, _, total = metrics.accuracy(target, pred)
-
-    _, _, roc_auc, _, disp_roc = metrics.roc_curves(target, pred, wandb)
-    _, _, pr_auc, _, disp_pr = metrics.pr_curves(target, pred, wandb)
-
-    # disp_roc.savefig(os.path.join(file_path, "roc.png"))
-    # disp_pr.savefig(os.path.join(file_path, "precision_recall.png"))
-
-    conf_mat = metrics.conf_matrix(target, pred, wandb)
-    f1, weighted_f1 = metrics.f1(target, pred, class_unbalance)
-
-    print(f"Accuracy {test_acc:.2f}, ROCAUC {roc_auc:.2f}, PRAUC {pr_auc:.2f}, F1 {f1:.2f}")
-    return (test_acc, roc_auc, pr_auc, conf_mat, f1, weighted_f1)

@@ -4,13 +4,26 @@ logging.getLogger("tensorflow").setLevel(logging.DEBUG)
 import tensorflow as tf
 import numpy as np
 import os
-from tf_get_data import get_dataset
+from typing import List, Tuple
+
+
+from tf.tf_get_data import get_dataset
 
 from helper import metrics
 
 import wandb
 
-def get_confusion_matrix(y_true, y_pred):
+def get_confusion_matrix(y_true: List[int], y_pred: List[int]) -> Tuple[int, int, int, int]:
+    """
+    Calculates the elements of a confusion matrix.
+
+    Args:
+    - y_true: A list of true labels.
+    - y_pred: A list of predicted labels.
+
+    Returns:
+    - A tuple containing the elements of the confusion matrix: (TP, FP, TN, FN)
+    """
     tp, fp, tn, fn = 0, 0, 0, 0
 
     for i in range(len(y_true)):
@@ -25,8 +38,17 @@ def get_confusion_matrix(y_true, y_pred):
     return tp, fp, tn, fn
 
 
-# Helper function to run inference on a TFLite model
-def run_tflite_model(quantized_model, test_data):
+def run_tflite_model(quantized_model: bytes, test_data: np.ndarray) -> List[int]:
+    """
+    Runs inference on a TFLite model.
+
+    Args:
+    - quantized_model: A bytes object containing the quantized TFLite model.
+    - test_data: A numpy array containing the test data.
+
+    Returns:
+    - A list of predicted labels (0 or 1).
+    """
 
     # Initialize the interpreter for the converted TFLite model
     interpreter = tf.lite.Interpreter(model_content=quantized_model)
@@ -58,8 +80,18 @@ def run_tflite_model(quantized_model, test_data):
 
     return predictions
 
-# Helper function to evaluate a TFLite model on all images
-def evaluate_quantized_model(quantized_model, test_data, test_labels):
+def evaluate_quantized_model(quantized_model: bytes, test_data: List[pd.DataFrame], test_labels: pd.DataFrame) -> None:
+    """
+    Evaluate a quantized TFLite model on test data and log metrics on Weights & Biases.
+
+    Args:
+    - quantized_model: A bytes object containing the quantized TFLite model.
+    - test_data: A list of pandas DataFrames containing the test data.
+    - test_labels: A pandas DataFrame containing the test labels.
+
+    Returns:
+    - None
+    """
     # Get Test dataset (y_test is already set to int8 since it can only be 0 or 1 while X_test will be converted to int8 later in run_tflite_model)
     X_test = tf.convert_to_tensor(np.array([data.values for data in test_data]).astype("float32"))
     y_test = np.array(test_labels["sepsis"]).astype("int8")

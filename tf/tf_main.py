@@ -9,23 +9,26 @@ import wandb
 import random
 import argparse
 
-from tf_get_data import get_dataset
+from tf.tf_get_data import get_dataset
 from models.tf_tcn import get_TCN
-from tf_train import train_model
-from tf_model_quantization import convert
-from tf_test import test_float_model
-from tf_quantized_model_evaluation import evaluate_quantized_model
-from tf_generate_data import generate_data
+from tf.tf_train import train_model
+from tf.tf_model_quantization import convert
+from tf.tf_test import test_float_model
+from tf.tf_quantized_model_evaluation import evaluate_quantized_model
+from tf.tf_generate_data import generate_data
 import sys
 
 warnings.filterwarnings("ignore")
 
+def set_seed(seed: int) -> None:
+    """
+    Set seed for reproducibility.
 
-### Set seed for reproducibility ###
-def set_seed(seed):
-  random.seed(seed)
-  np.random.seed(seed)
-  tf.random.set_seed(seed)
+    :param seed: Seed value
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
 
 
 if __name__ == '__main__':
