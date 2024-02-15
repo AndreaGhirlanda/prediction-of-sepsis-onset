@@ -13,7 +13,7 @@ The goal of this project was to build a machine learning model that would take a
 
 ### Structure of the Project
 
-The project is divided in two. In the first part we used pytorch develop the model and preprocess the data. In the second part I worked on developing the model in Tensorflow and integrating it with the pytorch data preprocessing pipeline. All the files related to the Tensorflow implementation start with "tf_".
+The project is divided in two. In the first part we used pytorch develop the model and preprocess the data. In the second part I worked on developing the model in Tensorflow, integrating it with the pytorch data preprocessing pipeline and quantizing the final model. All the files related to the tensorflow integration and model quantization can be found in the "tf" folder, while all the code related to the models is in the "models" folder.
 
 ### Model architecture
 
